@@ -1,0 +1,8 @@
+- name: "Sonarqube install"
+  hosts: sonarqubeservers
+
+  tasks:
+    - name: "Install JDK 11"
+      apt:
+        name: "openjdk-11-jdk"
+        state: present
