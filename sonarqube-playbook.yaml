@@ -1,8 +1,236 @@
-- name: "Sonarqube install"
+- name: "Sonarqube install prerequisites"
+  hosts: sonarqubeservers
+  #TODO: manage centos
+  tasks:
+    - name: "Install Packages"
+      apt:
+        name:
+          - "openjdk-11-jdk"
+          - "fontconfig"
+          - "libfreetype6"
+          - "unzip"
+        state: present
+
+
+- name: "Sonarqube configure system"
   hosts: sonarqubeservers
 
   tasks:
-    - name: "Install JDK 11"
-      apt:
-        name: "openjdk-11-jdk"
+    - name: "Upgrade system file descriptors and memory limit"
+      sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
         state: present
+      with_items:
+        - { name: "fs.file-max", value: "100000" }
+        - { name: "vm.max_map_count", value: "2621440" }
+
+    - name: "Upgrade file limits"
+      pam_limits:
+        domain: '*'
+        limit_type: "{{ item.limit_type }}"
+        limit_item: "{{ item.limit_item }}"
+        value: "{{ item.value }}"
+      with_items:
+        - { limit_type: "soft", limit_item: "nproc", value: "65535" }
+        - { limit_type: "hard", limit_item: "nproc", value: "65535" }
+        - { limit_type: "soft", limit_item: "nofile", value: "65535" }
+        - { limit_type: "hard", limit_item: "nproc", value: "65535" }
+
+    #TODO: reboot if file is changed
+    - name: "Configure SECCOMP"
+      lineinfile:
+        path: "/boot/config-{{ ansible_kernel }}"
+        regexp: '^CONFIG_HAVE_ARCH_SECCOMP_FILTER='
+        line: "CONFIG_HAVE_ARCH_SECCOMP_FILTER=y"
+
+    - name: "Configure SECCOMP"
+      lineinfile:
+        path: "/boot/config-{{ ansible_kernel }}"
+        regexp: '^CONFIG_SECCOMP_FILTER='
+        line: "CONFIG_SECCOMP_FILTER=y"
+
+    - name: "Configure SECCOMP"
+      lineinfile:
+        path: "/boot/config-{{ ansible_kernel }}"
+        regexp: '^CONFIG_SECCOMP='
+        line: "CONFIG_SECCOMP=y"
+
+
+- name: "Install Sonarqube Server"
+  hosts: sonarqubeservers
+  vars:
+    remote_download_dir: "/tmp/sonarDownloadDir"
+    remote_archive_file_path: "{{ remote_download_dir }}/sonar.zip"
+  tasks:
+    - name: "Create Home parent Directory"
+      file:
+        path: "{{ sonar_home_parent_folder }}"
+        owner: root
+        group: root
+        state: directory
+        mode: '0755'
+
+    - name: Create Sonar group
+      group:
+        name: "{{ sonar_group_name }}"
+
+    - name: "Create Sonar User"
+      user:
+        name: "{{ sonar_user_name }}"
+        group: "{{ sonar_group_name }}"
+        comment: "Sonarqube user account"
+        shell: "/bin/bash"
+        home: "{{ sonar_home_folder }}"
+
+    - name: "Create temporary download dir"
+      file:
+        path: "{{ remote_download_dir }}"
+        owner: "{{ sonar_user_name }}"
+        group: "{{ sonar_group_name }}"
+        state: directory
+
+    - name: "Download Sonar Latest"
+      get_url:
+        url: "{{ sonar_download_url }}"
+        dest: "{{ remote_archive_file_path }}"
+
+    - name: "Create Sonar install parent dir"
+      file:
+        path: "{{ sonar_install_parent_dir }}"
+        owner: "{{ sonar_user_name }}"
+        group: "{{ sonar_group_name }}"
+        state: directory
+
+    - name: "Extract {{ remote_archive_file_path }} into {{ sonar_install_parent_dir }}"
+      unarchive:
+        remote_src: yes
+        src: "{{ remote_archive_file_path }}"
+        dest: "{{ sonar_install_parent_dir }}"
+        owner: "{{ sonar_user_name }}"
+        group: "{{ sonar_group_name }}"
+
+    - name: "Delete temporary download dir"
+      file:
+        path: "{{ remote_download_dir }}"
+        state: directory #TODO: put absent
+
+    - name: "Create a symbolic link to sonarqube-{{ sonar_version }}"
+      file:
+        src: "sonarqube-{{ sonar_version }}"
+        dest: "{{ sonar_current_version_symlink }}"
+        group: "{{ sonar_group_name }}"
+        owner: "{{ sonar_user_name }}"
+        state: link
+
+    - name: "Change symlink owner"
+      command: chown -h {{ sonar_group_name }}:{{ sonar_user_name }} {{ sonar_current_version_symlink }}
+      args:
+        warn: false
+
+
+- name: Prepare conf dir
+  hosts: sonarqubeservers
+  tasks:
+
+    - name: Move Sonar conf folder to home
+      command: creates="{{ sonar_home_folder }}/conf" mv {{ sonar_install_parent_dir }}/sonarqube-{{ sonar_version }}/conf {{ sonar_home_folder }}
+
+    - name: remove {{ sonar_install_parent_dir }}/sonarqube-{{ sonar_version }}/conf
+      file:
+        path: "{{ sonar_install_parent_dir }}/sonarqube-{{ sonar_version }}/conf"
+        state: absent
+
+    - name: "Create a symbolic link to {{ sonar_install_parent_dir }}/sonarqube-{{ sonar_version }}/conf"
+      file:
+        src: "{{ sonar_home_folder }}/conf"
+        dest: "{{ sonar_install_parent_dir }}/sonarqube-{{ sonar_version }}/conf"
+        group: "{{ sonar_group_name }}"
+        owner: "{{ sonar_user_name }}"
+        state: link
+
+- name: Prepare extentions dir
+  hosts: sonarqubeservers
+  tasks:
+    - name: Move Sonar extensions folder to home
+      command:
+        cmd: mv {{ sonar_install_parent_dir }}/sonarqube-{{ sonar_version }}/extensions {{ sonar_home_folder }}
+        creates: "{{ sonar_home_folder }}/extensions"
+
+    - name: remove {{ sonar_install_parent_dir }}/sonarqube-{{ sonar_version }}/extensions
+      file:
+        path: "{{ sonar_install_parent_dir }}/sonarqube-{{ sonar_version }}/extensions"
+        state: absent
+
+    - name: "Create a symbolic link to {{ sonar_install_parent_dir }}/sonarqube-{{ sonar_version }}/extensions"
+      file:
+        src: "{{ sonar_home_folder }}/extensions"
+        dest: "{{ sonar_install_parent_dir }}/sonarqube-{{ sonar_version }}/extensions"
+        group: "{{ sonar_group_name }}"
+        owner: "{{ sonar_user_name }}"
+        state: link
+
+    - name: Download Oracle JDBC driver
+      get_url:
+        url: "{{ oracle_jdbc_driver_url }}"
+        dest: "{{ sonar_home_folder }}/extensions/jdbc-driver/oracle/{{ oracle_jdbc_driver_file }}"
+        owner: "{{ sonar_user_name }}"
+        group: "{{ sonar_group_name }}"
+
+- name: Configure sonar
+  hosts: sonarqubeservers
+  tasks:
+    - name: Configure jdbc parameters
+      lineinfile:
+        path: "{{ sonar_home_folder }}/conf/sonar.properties"
+        regexp: '^#?{{ item.property }}='
+        line: "{{ item.property }}={{ item.value }}"
+      with_items:
+        - { property: "sonar.jdbc.username" , value: "{{ sonar_jdbc_login }}" }
+        - { property: "sonar.jdbc.password" , value: "{{ sonar_jdbc_password }}" }
+        - { property: "sonar.jdbc.url" , value: "{{ sonar_jdbc_url }}" }
+
+    - name: Configure logs, temp, and data folders
+      lineinfile:
+        path: "{{ sonar_home_folder }}/conf/sonar.properties"
+        regexp: '^#?{{ item.property }}='
+        line: "{{ item.property }}={{ item.value }}"
+      with_items:
+        - { property: "sonar.path.logs" , value: "{{ sonar_logs_folder }}" }
+        - { property: "sonar.path.data" , value: "{{ sonar_data_folder }}" }
+        - { property: "sonar.path.temp" , value: "{{ sonar_temp_folder }}" }
+
+    - name: Configure Wrapper Java Opts
+      lineinfile:
+        path: "{{ sonar_home_folder }}/conf/wrapper.conf"
+        regexp: '^#?{{ item.property }}='
+        line: "{{ item.property }}={{ item.value }}"
+      with_items:
+        - { property: "wrapper.java.command" , value: "{{ java_exec_path }}" }
+
+    - name: Configure Sonar Java Opts
+      lineinfile:
+        path: "{{ sonar_home_folder }}/conf/sonar.properties"
+        regexp: '^#?{{ item.property }}='
+        line: "{{ item.property }}={{ item.value }}"
+      with_items:
+        - { property: "sonar.ce.javaOpts" , value: "-Xmx2g -XX:+HeapDumpOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom" }
+        - { property: "sonar.web.javaOpts" , value: "-Xmx2g -XX:+HeapDumpOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom" }
+        - { property: "sonar.web.javaOpts" , value: "-Xms2g -Xmx2g -XX:MaxDirectMemorySize=1024m -XX:+HeapDumpOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom" }
+
+- name: Configure Systemd
+  hosts: sonarqubeservers
+  tasks:
+    - name: Create systemd file
+      template:
+        src: template/sonar.service.j2
+        dest: /etc/systemd/system/sonar.service
+        group: "root"
+        owner: "root"
+
+    - name: Reload service sonar, in all cases
+      ansible.builtin.systemd:
+        name: sonar
+        enabled: yes
+        daemon_reload: yes
+        state: started

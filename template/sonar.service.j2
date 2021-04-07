@@ -1,0 +1,18 @@
+[Unit]
+Description=SonarQube service
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+User={{ sonar_user_name }}
+ExecStart={{ sonar_current_version_symlink }}/bin/linux-x86-64/sonar.sh start
+ExecStop={{ sonar_current_version_symlink }}/bin/linux-x86-64/sonar.sh stop
+ExecReload={{ sonar_current_version_symlink }}/bin/linux-x86-64/sonar.sh restart
+PIDFile={{ sonar_current_version_symlink }}/bin/linux-x86-64/SonarQube.pid
+LimitNOFILE=65536
+LimitNPROC=8192
+LimitMEMLOCK=262144
+
+[Install]
+WantedBy=multi-user.target
