@@ -1,0 +1,37 @@
+- name: Configure jdbc parameters
+  lineinfile:
+    path: "{{ sonar_home_folder }}/conf/sonar.properties"
+    regexp: '^#?{{ item.property }}='
+    line: "{{ item.property }}={{ item.value }}"
+  with_items:
+    - { property: "sonar.jdbc.username" , value: "{{ sonar_jdbc_login }}" }
+    - { property: "sonar.jdbc.password" , value: "{{ sonar_jdbc_password }}" }
+    - { property: "sonar.jdbc.url" , value: "{{ sonar_jdbc_url }}" }
+
+- name: Configure logs, temp, and data folders
+  lineinfile:
+    path: "{{ sonar_home_folder }}/conf/sonar.properties"
+    regexp: '^#?{{ item.property }}='
+    line: "{{ item.property }}={{ item.value }}"
+  with_items:
+    - { property: "sonar.path.logs" , value: "{{ sonar_logs_folder }}" }
+    - { property: "sonar.path.data" , value: "{{ sonar_data_folder }}" }
+    - { property: "sonar.path.temp" , value: "{{ sonar_temp_folder }}" }
+
+- name: Configure Wrapper Java Opts
+  lineinfile:
+    path: "{{ sonar_home_folder }}/conf/wrapper.conf"
+    regexp: '^#?{{ item.property }}='
+    line: "{{ item.property }}={{ item.value }}"
+  with_items:
+    - { property: "wrapper.java.command" , value: "{{ java_exec_path }}" }
+
+- name: Configure Sonar Java Opts
+  lineinfile:
+    path: "{{ sonar_home_folder }}/conf/sonar.properties"
+    regexp: '^#?{{ item.property }}='
+    line: "{{ item.property }}={{ item.value }}"
+  with_items:
+    - { property: "sonar.ce.javaOpts" , value: "-Xmx2g -XX:+HeapDumpOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom" }
+    - { property: "sonar.web.javaOpts" , value: "-Xmx2g -XX:+HeapDumpOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom" }
+    - { property: "sonar.web.javaOpts" , value: "-Xms2g -Xmx2g -XX:MaxDirectMemorySize=1024m -XX:+HeapDumpOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom" }

@@ -1,0 +1,8 @@
+- name: "Install Packages"
+  apt:
+    name:
+      - "openjdk-11-jdk"
+      - "fontconfig"
+      - "libfreetype6"
+      - "unzip"
+    state: present

@@ -1,0 +1,13 @@
+- name: Create systemd file
+  template:
+    src: template/sonar.service.j2
+    dest: /etc/systemd/system/sonar.service
+    group: "root"
+    owner: "root"
+
+- name: Reload service sonar, in all cases
+  ansible.builtin.systemd:
+    name: sonar
+    enabled: yes
+    daemon_reload: yes
+    state: started

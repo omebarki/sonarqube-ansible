@@ -1,0 +1,46 @@
+- name: Move Sonar conf folder to home
+  command: creates="{{ sonar_home_folder }}/conf" mv {{ sonar_install_parent_dir }}/sonarqube-{{ sonar_version }}/conf {{ sonar_home_folder }}
+
+- name: remove {{ sonar_install_parent_dir }}/sonarqube-{{ sonar_version }}/conf
+  file:
+    path: "{{ sonar_install_parent_dir }}/sonarqube-{{ sonar_version }}/conf"
+    state: absent
+
+- name: "Create a symbolic link to {{ sonar_install_parent_dir }}/sonarqube-{{ sonar_version }}/conf"
+  file:
+    src: "{{ sonar_home_folder }}/conf"
+    dest: "{{ sonar_install_parent_dir }}/sonarqube-{{ sonar_version }}/conf"
+    group: "{{ sonar_group_name }}"
+    owner: "{{ sonar_user_name }}"
+    state: link
+  become: yes
+  become_user: "{{ sonar_user_name }}"
+  become_method: sudo
+
+- name: Move Sonar extensions folder to home
+  command:
+    cmd: mv {{ sonar_install_parent_dir }}/sonarqube-{{ sonar_version }}/extensions {{ sonar_home_folder }}
+    creates: "{{ sonar_home_folder }}/extensions"
+
+- name: remove {{ sonar_install_parent_dir }}/sonarqube-{{ sonar_version }}/extensions
+  file:
+    path: "{{ sonar_install_parent_dir }}/sonarqube-{{ sonar_version }}/extensions"
+    state: absent
+
+- name: "Create a symbolic link to {{ sonar_install_parent_dir }}/sonarqube-{{ sonar_version }}/extensions"
+  file:
+    src: "{{ sonar_home_folder }}/extensions"
+    dest: "{{ sonar_install_parent_dir }}/sonarqube-{{ sonar_version }}/extensions"
+    group: "{{ sonar_group_name }}"
+    owner: "{{ sonar_user_name }}"
+    state: link
+  become: yes
+  become_user: "{{ sonar_user_name }}"
+  become_method: sudo
+
+- name: Download Oracle JDBC driver
+  get_url:
+    url: "{{ oracle_jdbc_driver_url }}"
+    dest: "{{ sonar_home_folder }}/extensions/jdbc-driver/oracle/{{ oracle_jdbc_driver_file }}"
+    owner: "{{ sonar_user_name }}"
+    group: "{{ sonar_group_name }}"

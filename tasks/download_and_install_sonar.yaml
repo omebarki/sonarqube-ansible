@@ -1,0 +1,62 @@
+- name: "Create Home parent Directory"
+  file:
+    path: "{{ sonar_home_parent_folder }}"
+    owner: root
+    group: root
+    state: directory
+    mode: '0755'
+
+- name: Create Sonar group
+  group:
+    name: "{{ sonar_group_name }}"
+
+- name: "Create Sonar User"
+  user:
+    name: "{{ sonar_user_name }}"
+    group: "{{ sonar_group_name }}"
+    comment: "Sonarqube user account"
+    shell: "/bin/bash"
+    home: "{{ sonar_home_folder }}"
+
+- name: "Create temporary download dir"
+  file:
+    path: "{{ remote_download_dir }}"
+    owner: "{{ sonar_user_name }}"
+    group: "{{ sonar_group_name }}"
+    state: directory
+
+- name: "Download Sonar Latest"
+  get_url:
+    url: "{{ sonar_download_url }}"
+    dest: "{{ remote_archive_file_path }}"
+
+- name: "Create Sonar install parent dir"
+  file:
+    path: "{{ sonar_install_parent_dir }}"
+    owner: "{{ sonar_user_name }}"
+    group: "{{ sonar_group_name }}"
+    state: directory
+
+- name: "Extract {{ remote_archive_file_path }} into {{ sonar_install_parent_dir }}"
+  unarchive:
+    remote_src: yes
+    src: "{{ remote_archive_file_path }}"
+    dest: "{{ sonar_install_parent_dir }}"
+    owner: "{{ sonar_user_name }}"
+    group: "{{ sonar_group_name }}"
+
+- name: "Delete temporary download dir"
+  file:
+    path: "{{ remote_download_dir }}"
+    state: directory #TODO: put absent
+
+- name: "Create a symbolic link to sonarqube-{{ sonar_version }}"
+  file:
+    src: "sonarqube-{{ sonar_version }}"
+    dest: "{{ sonar_current_version_symlink }}"
+    group: "{{ sonar_group_name }}"
+    owner: "{{ sonar_user_name }}"
+    state: link
+  become: yes
+  become_user: "{{ sonar_user_name }}"
+  become_method: sudo
